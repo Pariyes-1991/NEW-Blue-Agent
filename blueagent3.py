@@ -319,9 +319,7 @@ def create_mailto_link(email, name, level):
     subject = f"Interview Opportunity - {name}"
     body = f"""Dear {name},
 
-Thank you for your application. Based on our initial assessment, we would like to invite you for an interview.
-
-Your application has been classified as: {level} Level
+Thank you for your application. We would like to invite you for an interview.
 
 We will contact you shortly to schedule a convenient time for the interview.
 
@@ -370,33 +368,29 @@ def normalize_column_names(df):
     for col in df.columns:
         col_lower = str(col).lower().strip()
         
-        # Name variations
-        if any(name in col_lower for name in ['name', 'ชื่อ', 'full_name', 'fullname']):
+        # First name variations
+        if any(name in col_lower for name in ['first_name', 'firstname', 'ชื่อ', 'fname']):
+            column_mapping[col] = 'FirstName'
+        
+        # Last name variations
+        elif any(name in col_lower for name in ['last_name', 'lastname', 'นามสกุล', 'surname', 'lname']):
+            column_mapping[col] = 'LastName'
+        
+        # Full name variations (fallback)
+        elif any(name in col_lower for name in ['name', 'full_name', 'fullname']) and 'first' not in col_lower and 'last' not in col_lower:
             column_mapping[col] = 'Name'
+        
+        # Position variations
+        elif any(pos in col_lower for pos in ['position', 'job', 'role', 'ตำแหน่ง', 'งาน']):
+            column_mapping[col] = 'Position'
+        
+        # Phone variations
+        elif any(phone in col_lower for phone in ['phone', 'tel', 'mobile', 'เบอร์', 'โทรศัพท์', 'เบอร์โทร']):
+            column_mapping[col] = 'Phone'
         
         # Email variations
         elif any(email in col_lower for email in ['email', 'mail', 'อีเมล']):
             column_mapping[col] = 'Email'
-        
-        # Weight variations
-        elif any(weight in col_lower for weight in ['weight', 'น้ำหนัก', 'wt', 'kg']):
-            column_mapping[col] = 'Weight_kg'
-        
-        # Height variations
-        elif any(height in col_lower for height in ['height', 'ส่วนสูง', 'ht', 'cm']):
-            column_mapping[col] = 'Height_cm'
-        
-        # Experience variations
-        elif any(exp in col_lower for exp in ['experience', 'exp', 'ประสบการณ์', 'years', 'year']):
-            column_mapping[col] = 'Experience_Years'
-        
-        # Education variations
-        elif any(edu in col_lower for edu in ['education', 'degree', 'การศึกษา', 'วุฒิ']):
-            column_mapping[col] = 'Education'
-        
-        # Skills variations
-        elif any(skill in col_lower for skill in ['skill', 'skills', 'ทักษะ', 'ability']):
-            column_mapping[col] = 'Skills'
     
     # Rename columns
     df_normalized = df.rename(columns=column_mapping)
@@ -405,13 +399,11 @@ def normalize_column_names(df):
 def create_sample_data():
     """Create sample data for demonstration"""
     return pd.DataFrame({
-        'Name': ['John Smith', 'Sarah Johnson', 'Mike Chen', 'Emily Davis', 'Robert Wilson'],
-        'Email': ['john.smith@email.com', 'sarah.johnson@email.com', 'mike.chen@email.com', 'emily.davis@email.com', 'robert.wilson@email.com'],
-        'Weight_kg': [70, 65, 85, 60, 95],
-        'Height_cm': [175, 160, 180, 165, 170],
-        'Experience_Years': [3, 5, 2, 7, 1],
-        'Education': ['Bachelor', 'Masters', 'Bachelor', 'PhD', 'High School'],
-        'Skills': ['Python, SQL, Data Analysis', 'Java, Project Management, Leadership', 'Python, Machine Learning', 'Research, Statistics, Python', 'Basic Computer Skills']
+        'FirstName': ['John', 'Sarah', 'Mike', 'Emily', 'Robert'],
+        'LastName': ['Smith', 'Johnson', 'Chen', 'Davis', 'Wilson'],
+        'Position': ['Software Engineer', 'Data Scientist', 'Frontend Developer', 'AI Researcher', 'Junior Developer'],
+        'Phone': ['081-234-5678', '082-345-6789', '083-456-7890', '084-567-8901', '085-678-9012'],
+        'Email': ['john.smith@email.com', 'sarah.johnson@email.com', 'mike.chen@email.com', 'emily.davis@email.com', 'robert.wilson@email.com']
     })
 
 def main():
@@ -426,7 +418,7 @@ def main():
     # Input section
     st.markdown('<div class="input-section">', unsafe_allow_html=True)
     st.markdown("### 📊 Excel Data Input")
-    st.markdown("**Expected Excel columns:** Name, Email, Weight_kg, Height_cm, Experience_Years, Education, Skills")
+    st.markdown("**Expected Excel columns:** FirstName, LastName, Position, Phone, Email")
     st.markdown("*Column names are flexible - the system will auto-detect similar names*")
     
     excel_url = st.text_input(
@@ -435,11 +427,7 @@ def main():
         help="Make sure the Excel file is shared with view permissions"
     )
     
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        analyze_button = st.button("🔍 Fetch & Analyze", type="primary")
-    with col2:
-        demo_button = st.button("📝 Try Demo Data")
+    analyze_button = st.button("🔍 Fetch & Analyze", type="primary")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -450,59 +438,46 @@ def main():
         st.session_state.analysis_complete = False
     
     # Process data when button is clicked
-    if (analyze_button and excel_url) or demo_button:
+    if analyze_button and excel_url:
         with st.spinner("Fetching and analyzing data..."):
-            if demo_button:
-                # Use demo data directly
+            # Try to fetch data from URL
+            df, error = process_excel_data(excel_url)
+            
+            if df is None:
+                st.markdown(f'<div class="error-message">⚠️ Could not fetch data from URL: {error}</div>', unsafe_allow_html=True)
+                st.markdown('<div class="error-message">📝 Using sample data for demonstration...</div>', unsafe_allow_html=True)
                 df = create_sample_data()
-                st.markdown('<div class="success-message">📝 Demo data loaded successfully!</div>', unsafe_allow_html=True)
             else:
-                # Try to fetch data from URL
-                df, error = process_excel_data(excel_url)
-                
-                if df is None:
-                    st.markdown(f'<div class="error-message">⚠️ Could not fetch data from URL: {error}</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="error-message">📝 Using sample data for demonstration...</div>', unsafe_allow_html=True)
-                    df = create_sample_data()
-                else:
-                    # Normalize column names for real data
-                    df = normalize_column_names(df)
-                    st.markdown('<div class="success-message">✅ Data fetched successfully from Excel file!</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="success-message">📊 Found {len(df)} applicants with columns: {", ".join(df.columns)}</div>', unsafe_allow_html=True)
+                # Normalize column names for real data
+                df = normalize_column_names(df)
+                st.markdown('<div class="success-message">✅ Data fetched successfully from Excel file!</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="success-message">📊 Found {len(df)} applicants with columns: {", ".join(df.columns)}</div>', unsafe_allow_html=True)
             
             # Process each applicant
             applicants = []
             for _, row in df.iterrows():
                 # Safely get values with defaults
-                name = row.get('Name', f"Applicant {len(applicants) + 1}")
+                first_name = row.get('FirstName', '')
+                last_name = row.get('LastName', '')
+                full_name = row.get('Name', f"{first_name} {last_name}".strip())
+                
+                # If we have separate first/last names, use them; otherwise use full name
+                if first_name or last_name:
+                    display_name = f"{first_name} {last_name}".strip()
+                else:
+                    display_name = full_name or f"Applicant {len(applicants) + 1}"
+                
+                position = row.get('Position', 'Not specified')
+                phone = row.get('Phone', 'Not provided')
                 email = row.get('Email', 'no-email@example.com')
-                weight = row.get('Weight_kg', 70)  # Default weight
-                height = row.get('Height_cm', 170)  # Default height
-                experience = row.get('Experience_Years', 1)  # Default experience
-                education = row.get('Education', 'Bachelor')  # Default education
-                skills = row.get('Skills', 'General Skills')  # Default skills
-                
-                # Convert to proper types
-                try:
-                    weight = float(weight) if pd.notna(weight) else 70
-                    height = float(height) if pd.notna(height) else 170
-                    experience = int(experience) if pd.notna(experience) else 1
-                except (ValueError, TypeError):
-                    weight, height, experience = 70, 170, 1
-                
-                bmi = calculate_bmi(weight, height)
-                level = analyze_applicant_level(bmi, experience, str(education), str(skills))
                 
                 applicant = {
-                    'name': str(name),
-                    'email': str(email),
-                    'weight': weight,
-                    'height': height,
-                    'bmi': bmi,
-                    'experience': experience,
-                    'education': str(education),
-                    'skills': str(skills),
-                    'level': level
+                    'first_name': str(first_name),
+                    'last_name': str(last_name),
+                    'full_name': str(display_name),
+                    'position': str(position),
+                    'phone': str(phone),
+                    'email': str(email)
                 }
                 applicants.append(applicant)
             
@@ -517,9 +492,6 @@ def main():
         
         # Statistics
         total_applicants = len(st.session_state.applicants_data)
-        high_level = sum(1 for a in st.session_state.applicants_data if a['level'] == 'High')
-        mid_level = sum(1 for a in st.session_state.applicants_data if a['level'] == 'Mid')
-        low_level = sum(1 for a in st.session_state.applicants_data if a['level'] == 'Low')
         
         st.markdown(f"""
         <div class="stats-container">
@@ -527,54 +499,36 @@ def main():
                 <div class="stat-number">{total_applicants}</div>
                 <div class="stat-label">Total Applicants</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">{high_level}</div>
-                <div class="stat-label">High Level</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{mid_level}</div>
-                <div class="stat-label">Mid Level</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{low_level}</div>
-                <div class="stat-label">Low Level</div>
-            </div>
         </div>
         """, unsafe_allow_html=True)
         
         # Display applicants
-        st.markdown("### 👥 Applicant Analysis Results")
+        st.markdown("### 👥 Applicant Information")
         
-        for applicant in st.session_state.applicants_data:
-            level_class = f"level-{applicant['level'].lower()}"
-            
-            mailto_link = create_mailto_link(applicant['email'], applicant['name'], applicant['level'])
-            teams_link = create_teams_link(applicant['email'], applicant['name'])
+        for i, applicant in enumerate(st.session_state.applicants_data, 1):
+            mailto_link = create_mailto_link(applicant['email'], applicant['full_name'], "")
+            teams_link = create_teams_link(applicant['email'], applicant['full_name'])
             
             st.markdown(f"""
             <div class="applicant-card">
-                <h3 style="margin: 0 0 1rem 0; color: #007BFF;">{applicant['name']}</h3>
-                <div class="level-badge {level_class}">
-                    {applicant['level']} Level
-                </div>
+                <h3 style="margin: 0 0 1rem 0; color: #007BFF;">#{i} {applicant['full_name']}</h3>
                 
                 <div class="info-grid">
                     <div class="info-item">
-                        <strong>Email:</strong><br>{applicant['email']}
+                        <strong>ชื่อ:</strong><br>{applicant['first_name']}
                     </div>
                     <div class="info-item">
-                        <strong>BMI:</strong><br>{applicant['bmi']} {'(⚠️ >25)' if applicant['bmi'] and applicant['bmi'] > 25 else '(✅ ≤25)'}
+                        <strong>นามสกุล:</strong><br>{applicant['last_name']}
                     </div>
                     <div class="info-item">
-                        <strong>Experience:</strong><br>{applicant['experience']} years
+                        <strong>ตำแหน่งที่สมัคร:</strong><br>{applicant['position']}
                     </div>
                     <div class="info-item">
-                        <strong>Education:</strong><br>{applicant['education']}
+                        <strong>เบอร์โทรศัพท์:</strong><br>{applicant['phone']}
                     </div>
-                </div>
-                
-                <div style="margin: 1rem 0;">
-                    <strong>Skills:</strong> {applicant['skills']}
+                    <div class="info-item">
+                        <strong>อีเมล:</strong><br>{applicant['email']}
+                    </div>
                 </div>
                 
                 <div class="action-buttons">
