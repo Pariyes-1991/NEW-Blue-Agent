@@ -363,6 +363,57 @@ def process_excel_data(excel_url):
     except Exception as e:
         return None, str(e)
 
+def normalize_column_names(df):
+    """Normalize column names to handle different formats"""
+    column_mapping = {}
+    
+    for col in df.columns:
+        col_lower = str(col).lower().strip()
+        
+        # Name variations
+        if any(name in col_lower for name in ['name', 'ชื่อ', 'full_name', 'fullname']):
+            column_mapping[col] = 'Name'
+        
+        # Email variations
+        elif any(email in col_lower for email in ['email', 'mail', 'อีเมล']):
+            column_mapping[col] = 'Email'
+        
+        # Weight variations
+        elif any(weight in col_lower for weight in ['weight', 'น้ำหนัก', 'wt', 'kg']):
+            column_mapping[col] = 'Weight_kg'
+        
+        # Height variations
+        elif any(height in col_lower for height in ['height', 'ส่วนสูง', 'ht', 'cm']):
+            column_mapping[col] = 'Height_cm'
+        
+        # Experience variations
+        elif any(exp in col_lower for exp in ['experience', 'exp', 'ประสบการณ์', 'years', 'year']):
+            column_mapping[col] = 'Experience_Years'
+        
+        # Education variations
+        elif any(edu in col_lower for edu in ['education', 'degree', 'การศึกษา', 'วุฒิ']):
+            column_mapping[col] = 'Education'
+        
+        # Skills variations
+        elif any(skill in col_lower for skill in ['skill', 'skills', 'ทักษะ', 'ability']):
+            column_mapping[col] = 'Skills'
+    
+    # Rename columns
+    df_normalized = df.rename(columns=column_mapping)
+    return df_normalized
+
+def create_sample_data():
+    """Create sample data for demonstration"""
+    return pd.DataFrame({
+        'Name': ['John Smith', 'Sarah Johnson', 'Mike Chen', 'Emily Davis', 'Robert Wilson'],
+        'Email': ['john.smith@email.com', 'sarah.johnson@email.com', 'mike.chen@email.com', 'emily.davis@email.com', 'robert.wilson@email.com'],
+        'Weight_kg': [70, 65, 85, 60, 95],
+        'Height_cm': [175, 160, 180, 165, 170],
+        'Experience_Years': [3, 5, 2, 7, 1],
+        'Education': ['Bachelor', 'Masters', 'Bachelor', 'PhD', 'High School'],
+        'Skills': ['Python, SQL, Data Analysis', 'Java, Project Management, Leadership', 'Python, Machine Learning', 'Research, Statistics, Python', 'Basic Computer Skills']
+    })
+
 def main():
     # Header
     st.markdown("""
@@ -375,6 +426,8 @@ def main():
     # Input section
     st.markdown('<div class="input-section">', unsafe_allow_html=True)
     st.markdown("### 📊 Excel Data Input")
+    st.markdown("**Expected Excel columns:** Name, Email, Weight_kg, Height_cm, Experience_Years, Education, Skills")
+    st.markdown("*Column names are flexible - the system will auto-detect similar names*")
     
     excel_url = st.text_input(
         "Paste your Microsoft Excel Online (OneDrive/SharePoint) link:",
@@ -382,9 +435,11 @@ def main():
         help="Make sure the Excel file is shared with view permissions"
     )
     
-    col1, col2 = st.columns([2, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         analyze_button = st.button("🔍 Fetch & Analyze", type="primary")
+    with col2:
+        demo_button = st.button("📝 Try Demo Data")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -395,47 +450,58 @@ def main():
         st.session_state.analysis_complete = False
     
     # Process data when button is clicked
-    if analyze_button and excel_url:
+    if (analyze_button and excel_url) or demo_button:
         with st.spinner("Fetching and analyzing data..."):
-            # For demo purposes, we'll create sample data if URL processing fails
-            df, error = process_excel_data(excel_url)
-            
-            if df is None:
-                st.markdown(f'<div class="error-message">⚠️ Could not fetch data from URL: {error}</div>', unsafe_allow_html=True)
-                st.markdown('<div class="error-message">📝 Using sample data for demonstration...</div>', unsafe_allow_html=True)
+            if demo_button:
+                # Use demo data directly
+                df = create_sample_data()
+                st.markdown('<div class="success-message">📝 Demo data loaded successfully!</div>', unsafe_allow_html=True)
+            else:
+                # Try to fetch data from URL
+                df, error = process_excel_data(excel_url)
                 
-                # Create sample data
-                sample_data = {
-                    'Name': ['John Smith', 'Sarah Johnson', 'Mike Chen', 'Emily Davis', 'Robert Wilson'],
-                    'Email': ['john.smith@email.com', 'sarah.johnson@email.com', 'mike.chen@email.com', 'emily.davis@email.com', 'robert.wilson@email.com'],
-                    'Weight_kg': [70, 65, 85, 60, 95],
-                    'Height_cm': [175, 160, 180, 165, 170],
-                    'Experience_Years': [3, 5, 2, 7, 1],
-                    'Education': ['Bachelor', 'Masters', 'Bachelor', 'PhD', 'High School'],
-                    'Skills': ['Python, SQL, Data Analysis', 'Java, Project Management, Leadership', 'Python, Machine Learning', 'Research, Statistics, Python', 'Basic Computer Skills']
-                }
-                df = pd.DataFrame(sample_data)
+                if df is None:
+                    st.markdown(f'<div class="error-message">⚠️ Could not fetch data from URL: {error}</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="error-message">📝 Using sample data for demonstration...</div>', unsafe_allow_html=True)
+                    df = create_sample_data()
+                else:
+                    # Normalize column names for real data
+                    df = normalize_column_names(df)
+                    st.markdown('<div class="success-message">✅ Data fetched successfully from Excel file!</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="success-message">📊 Found {len(df)} applicants with columns: {", ".join(df.columns)}</div>', unsafe_allow_html=True)
             
             # Process each applicant
             applicants = []
             for _, row in df.iterrows():
-                bmi = calculate_bmi(row['Weight_kg'], row['Height_cm'])
-                level = analyze_applicant_level(
-                    bmi, 
-                    row['Experience_Years'], 
-                    row['Education'], 
-                    row['Skills']
-                )
+                # Safely get values with defaults
+                name = row.get('Name', f"Applicant {len(applicants) + 1}")
+                email = row.get('Email', 'no-email@example.com')
+                weight = row.get('Weight_kg', 70)  # Default weight
+                height = row.get('Height_cm', 170)  # Default height
+                experience = row.get('Experience_Years', 1)  # Default experience
+                education = row.get('Education', 'Bachelor')  # Default education
+                skills = row.get('Skills', 'General Skills')  # Default skills
+                
+                # Convert to proper types
+                try:
+                    weight = float(weight) if pd.notna(weight) else 70
+                    height = float(height) if pd.notna(height) else 170
+                    experience = int(experience) if pd.notna(experience) else 1
+                except (ValueError, TypeError):
+                    weight, height, experience = 70, 170, 1
+                
+                bmi = calculate_bmi(weight, height)
+                level = analyze_applicant_level(bmi, experience, str(education), str(skills))
                 
                 applicant = {
-                    'name': row['Name'],
-                    'email': row['Email'],
-                    'weight': row['Weight_kg'],
-                    'height': row['Height_cm'],
+                    'name': str(name),
+                    'email': str(email),
+                    'weight': weight,
+                    'height': height,
                     'bmi': bmi,
-                    'experience': row['Experience_Years'],
-                    'education': row['Education'],
-                    'skills': row['Skills'],
+                    'experience': experience,
+                    'education': str(education),
+                    'skills': str(skills),
                     'level': level
                 }
                 applicants.append(applicant)
